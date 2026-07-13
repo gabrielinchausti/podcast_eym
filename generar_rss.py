@@ -14,8 +14,8 @@ Mantiene el estado en episodios.json y escribe docs/feed.xml
 
 import argparse
 import json
-from datetime import datetime, timezone
-from email.utils import format_datetime
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime, parsedate_to_datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -28,8 +28,16 @@ PODCAST = {
     "autor": "Automatización personal",
     "idioma": "es-uy",
     "link": "https://github.com",   # se puede apuntar al repo
-    "max_episodios": 20,            # los más viejos salen del feed
+    "dias_retencion": 30,           # episodios más viejos salen del feed Y se borran de GitHub
 }
+
+
+def tag_de_url(url: str) -> str | None:
+    """Extrae el tag del Release a partir de la URL del asset (.../releases/download/<TAG>/archivo)."""
+    partes = url.split("/releases/download/")
+    if len(partes) != 2:
+        return None
+    return partes[1].split("/")[0]
 
 ESTADO = Path("episodios.json")
 FEED   = Path("docs/feed.xml")
@@ -43,7 +51,7 @@ def cargar_estado() -> list[dict]:
 
 def escribir_feed(episodios: list[dict]) -> None:
     items = []
-    for ep in episodios[: PODCAST["max_episodios"]]:
+    for ep in episodios:
         items.append(f"""    <item>
       <title>{escape(ep["titulo"])}</title>
       <description>{escape(ep["descripcion"])}</description>
@@ -81,7 +89,7 @@ def main():
 
     episodios = cargar_estado()
 
-    # Evitar duplicados si el workflow se corre dos veces el mismo día
+    # Evitar duplicados si el script se corre dos veces el mismo día
     episodios = [e for e in episodios if e["url"] != args.url]
 
     episodios.insert(0, {
@@ -92,9 +100,18 @@ def main():
         "pubdate": format_datetime(datetime.now(timezone.utc)),
     })
 
-    ESTADO.write_text(json.dumps(episodios, ensure_ascii=False, indent=2), encoding="utf-8")
-    escribir_feed(episodios)
-    print(f"✅ Feed actualizado con {len(episodios)} episodio(s) → {FEED}")
+    limite = datetime.now(timezone.utc) - timedelta(days=PODCAST["dias_retencion"])
+    vigentes = [e for e in episodios if parsedate_to_datetime(e["pubdate"]) >= limite]
+    vencidos = [e for e in episodios if parsedate_to_datetime(e["pubdate"]) < limite]
+
+    ESTADO.write_text(json.dumps(vigentes, ensure_ascii=False, indent=2), encoding="utf-8")
+    escribir_feed(vigentes)
+    print(f"✅ Feed actualizado con {len(vigentes)} episodio(s) → {FEED}")
+
+    for ep in vencidos:
+        tag = tag_de_url(ep["url"])
+        if tag:
+            print(f"VENCIDO:{tag}")
 
 
 if __name__ == "__main__":
