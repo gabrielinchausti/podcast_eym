@@ -1,10 +1,10 @@
 # Secretos y sesión de El País — nunca commitear
 cookies.txt
 
-# Archivos generados por el pipeline
-episodios.json
+# Archivos generados por el pipeline (episodios.json SÍ se commitea: es el estado del feed)
 *.mp3
 guion-*.txt
+logs/
 
 # Python
 __pycache__/
