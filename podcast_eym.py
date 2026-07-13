@@ -20,7 +20,7 @@ Otras opciones:
     python3 podcast_eym.py --rtf "UY-E&M.rtf"      # modo viejo, desde el mail
 
 Requisitos:
-    pip install openai requests beautifulsoup4
+    pip install openai beautifulsoup4 curl_cffi
 """
 
 import argparse
@@ -33,7 +33,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import requests
+from curl_cffi import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
 
@@ -50,11 +50,6 @@ TZ_UY = ZoneInfo("America/Montevideo")  # para decidir qué es "hoy"
 INSTRUCCIONES_VOZ = (
     "Hablá en español con tono de locutor de informativo radial: "
     "ritmo pausado y claro, profesional pero cercano."
-)
-
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 )
 
 # Frases de boilerplate/paywall a filtrar (heredadas del scraper en R)
@@ -78,8 +73,8 @@ FRASES_BASURA = re.compile(
 
 def crear_sesion(cookies_path: str | None) -> requests.Session:
     """Sesión HTTP; si hay cookies.txt exportado del navegador, entra como suscriptor."""
-    s = requests.Session()
-    s.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "es-UY,es;q=0.9"})
+    s = requests.Session(impersonate="chrome")
+    s.headers.update({"Accept-Language": "es-UY,es;q=0.9"})
     if cookies_path:
         jar = http.cookiejar.MozillaCookieJar(cookies_path)
         jar.load(ignore_discard=True, ignore_expires=True)
