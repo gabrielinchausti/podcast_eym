@@ -47,6 +47,15 @@ MAX_CHARS_TTS = 3000                # margen seguro bajo el límite por pedido
 MAX_NOTAS     = 15                  # tope de notas a considerar por corrida
 TZ_UY = ZoneInfo("America/Montevideo")  # para decidir qué es "hoy"
 
+DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+            "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def fecha_larga_es(d: date) -> str:
+    """Fecha en español, sin depender del locale del sistema (distinto en GitHub Actions)."""
+    return f"{DIAS_ES[d.weekday()]} {d.day} de {MESES_ES[d.month - 1]} de {d.year}"
+
 INSTRUCCIONES_VOZ = (
     "Hablá en español con tono de locutor de informativo radial: "
     "ritmo pausado y claro, profesional pero cercano."
@@ -175,7 +184,7 @@ def leer_articulo(sesion: requests.Session, url: str) -> dict:
 # ─── 3. Generar el guion con GPT ──────────────────────────────────────────────
 
 def generar_guion(client: OpenAI, articulos: list[dict]) -> str:
-    hoy = date.today().strftime("%d de %B de %Y")
+    hoy = fecha_larga_es(date.today())
 
     notas = "\n\n".join(
         f"=== NOTA {i} ===\nTítulo: {a['titulo']}\nAutor: {a['autor']}\nTexto:\n{a['cuerpo'][:8000]}"
@@ -188,10 +197,18 @@ def generar_guion(client: OpenAI, articulos: list[dict]) -> str:
         "Tu oyente es una persona informada que escucha mientras maneja."
     )
 
-    prompt_usuario = f"""Con las notas de abajo, escribí el guion COMPLETO de un episodio de unos 5 minutos (750 a 850 palabras).
+    prompt_usuario = f"""Con las notas de abajo, escribí el guion COMPLETO de un episodio de podcast.
+Te paso {len(articulos)} notas (NOTA 1 a NOTA {len(articulos)}). Es OBLIGATORIO incluir un bloque para
+cada una de las {len(articulos)} — ninguna puede quedar afuera del guion, ni siquiera las que te
+parezcan menos relevantes.
+
+La duración total depende de cuántas notas haya, no es un número fijo:
+- Cada nota tiene que desarrollarse en al menos 70-80 palabras (unos 30 segundos hablados como mínimo) — no la resumas en una sola frase aunque haya muchas notas.
+- Aun así, no superes en total las 1800 palabras entre todas las notas (unos 13 minutos hablados) — si hay muchas notas, priorizá y sintetizá más las menos relevantes antes que estirar el episodio de más.
 
 Estructura:
-- Apertura breve: "Resumen de Economía y Mercado de El País, edición del {hoy}."
+- Apertura breve: empezá literalmente con "Resumen de Economía y Mercado de El País, edición del {hoy}."
+  No menciones ni inventes ningún otro día de la semana o fecha distinta a esa.
 - Un bloque por cada nota: mencioná al autor y contá con claridad su argumento central, los datos más relevantes y su conclusión. Usá transiciones naturales entre notas.
 - Cierre de una o dos frases.
 
