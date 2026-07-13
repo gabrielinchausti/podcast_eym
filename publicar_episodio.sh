@@ -68,6 +68,9 @@ git add docs/feed.xml episodios.json
 git commit -m "Episodio $FECHA" || echo "  Sin cambios para commitear."
 git push
 
+echo "  Forzando rebuild de GitHub Pages (el automático a veces no dispara)..."
+gh api "repos/$REPO/pages/builds" -X POST >/dev/null || echo "  (no se pudo forzar el rebuild, GitHub debería igual dispararlo solo)"
+
 echo "Paso 6/6: limpiando archivos locales..."
 rm -f "$MP3" "$GUION"
 
