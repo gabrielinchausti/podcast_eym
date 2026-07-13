@@ -28,6 +28,7 @@ PODCAST = {
     "autor": "Automatización personal",
     "idioma": "es-uy",
     "link": "https://github.com",   # se puede apuntar al repo
+    "imagen": "https://gabrielinchausti.github.io/podcast_eym/cover.png",
     "dias_retencion": 30,           # episodios más viejos salen del feed Y se borran de GitHub
 }
 
@@ -70,6 +71,12 @@ def escribir_feed(episodios: list[dict]) -> None:
     <link>{escape(PODCAST["link"])}</link>
     <lastBuildDate>{ahora}</lastBuildDate>
     <itunes:author>{escape(PODCAST["autor"])}</itunes:author>
+    <itunes:image href="{escape(PODCAST["imagen"])}"/>
+    <image>
+      <url>{escape(PODCAST["imagen"])}</url>
+      <title>{escape(PODCAST["titulo"])}</title>
+      <link>{escape(PODCAST["link"])}</link>
+    </image>
     <itunes:explicit>false</itunes:explicit>
 {chr(10).join(items)}
   </channel>

@@ -5,15 +5,21 @@
     <description>Resumen automatizado de las columnas del suplemento Economía y Mercado del diario El País (Uruguay). Uso personal.</description>
     <language>es-uy</language>
     <link>https://github.com</link>
-    <lastBuildDate>Mon, 13 Jul 2026 23:25:35 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 13 Jul 2026 23:39:52 +0000</lastBuildDate>
     <itunes:author>Automatización personal</itunes:author>
+    <itunes:image href="https://gabrielinchausti.github.io/podcast_eym/cover.png"/>
+    <image>
+      <url>https://gabrielinchausti.github.io/podcast_eym/cover.png</url>
+      <title>Economía y Mercado — Resumen semanal</title>
+      <link>https://github.com</link>
+    </image>
     <itunes:explicit>false</itunes:explicit>
     <item>
       <title>Economía y Mercado — 2026-07-13</title>
       <description>Resumen semanal de Economía y Mercado.</description>
       <enclosure url="https://github.com/gabrielinchausti/podcast_eym/releases/download/eym-2026-07-13/episodio-eym-2026-07-13.mp3" length="6830208" type="audio/mpeg"/>
       <guid isPermaLink="false">https://github.com/gabrielinchausti/podcast_eym/releases/download/eym-2026-07-13/episodio-eym-2026-07-13.mp3</guid>
-      <pubDate>Mon, 13 Jul 2026 23:25:35 +0000</pubDate>
+      <pubDate>Mon, 13 Jul 2026 23:39:52 +0000</pubDate>
     </item>
   </channel>
 </rss>
