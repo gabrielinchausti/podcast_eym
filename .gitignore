@@ -1,0 +1,16 @@
+# Secretos y sesión de El País — nunca commitear
+cookies.txt
+
+# Archivos generados por el pipeline
+episodios.json
+*.mp3
+guion-*.txt
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# macOS
+.DS_Store
