@@ -154,6 +154,9 @@ def leer_articulo(sesion: requests.Session, url: str) -> dict:
         if meta_fecha and meta_fecha.get("content"):
             try:
                 fecha = datetime.fromisoformat(meta_fecha["content"].replace("Z", "+00:00"))
+                if fecha.tzinfo is None:
+                    # El sitio no manda offset; sus timestamps son hora de Montevideo.
+                    fecha = fecha.replace(tzinfo=TZ_UY)
             except ValueError:
                 pass
 
