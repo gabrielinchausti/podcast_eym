@@ -39,7 +39,8 @@ gh release create "$TAG" \
     --repo "$REPO" \
     --title "Economía y Mercado — $FECHA" \
     --notes "Episodio generado automáticamente." \
-    "$MP3" "$GUION"
+    "$MP3" "$GUION" \
+  || gh release upload "$TAG" "$MP3" "$GUION" --repo "$REPO" --clobber
 
 MP3_URL="https://github.com/$REPO/releases/download/$TAG/$MP3"
 BYTES=$(stat -f%z "$MP3")
