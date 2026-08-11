@@ -7,59 +7,75 @@ que se publican los **lunes**. El episodio se escucha en Apple Podcasts durante
 el viaje al trabajo del dueño del proyecto (Gabriel).
 
 Este proyecto fue diseñado en conversaciones con Claude en claude.ai. Existe un
-proyecto hermano ya funcionando con la misma arquitectura de distribución:
-un podcast que graba el informativo matinal de Radio Montecarlo (CX20) usando
-GitHub Actions + Releases + RSS en GitHub Pages + cron-job.org.
+proyecto hermano con arquitectura de distribución similar (GitHub Releases + RSS
+en GitHub Pages): un podcast que graba el informativo matinal de Radio Montecarlo
+(CX20), repo `montecarlo-podcast`.
+
+## Estado: en producción
+El pipeline corre automático todos los lunes desde el 13/07/2026. Repo público:
+https://github.com/gabrielinchausti/podcast_eym — feed en
+https://gabrielinchausti.github.io/podcast_eym/feed.xml
 
 ## Arquitectura (4 etapas)
 1. **Scraping** (`podcast_eym.py`): entra a https://www.elpais.com.uy/economia-y-mercado,
    junta links de notas con regex sobre el HTML crudo (patrón `/economia-y-mercado/<slug>`),
    baja cada nota y extrae título/autor/fecha/cuerpo desde metadatos
-   (`og:title`, `article:author`, `article:published_time`).
-   **Por defecto solo toma notas publicadas HOY en hora de Montevideo** (zoneinfo
-   `America/Montevideo`); `--dias N` amplía la ventana (útil para probar en días
-   que no son lunes).
-2. **Guion**: API de OpenAI (`gpt-4o-mini`) escribe un guion de 750-850 palabras
-   en español rioplatense, con reglas de dicción radial (números en palabras).
+   (`og:title`, `article:author`, `article:published_time`). Usa `curl_cffi` con
+   `impersonate="chrome"` en vez de `requests` — El País bloquea por fingerprint TLS.
+   En producción corre con `--dias 5` (ventana de ~5 días para no perder columnas de
+   jueves/viernes si el run cae más tarde en el día).
+2. **Guion**: API de OpenAI (`gpt-4o-mini`) escribe el guion en español rioplatense,
+   con reglas de dicción radial (números en palabras). Duración variable: piso de
+   ~70-80 palabras por nota (mínimo ~30s hablados), techo total de 1800 palabras;
+   instrucción explícita de no omitir ninguna nota recibida.
 3. **Audio**: TTS de OpenAI (`gpt-4o-mini-tts`, voz "ash"). El guion se parte en
    trozos de ≤3000 caracteres cortando en fin de oración; los MP3 se concatenan.
-4. **Distribución** (`generar_rss.py` + `.github/workflows/podcast.yml`):
-   GitHub Actions corre lunes 09:30 UTC (06:30 Montevideo), sube MP3 y guion a un
-   Release, actualiza `docs/feed.xml` (servido por GitHub Pages) y commitea.
-   Apple Podcasts sigue ese feed por URL.
+4. **Distribución — 100% LOCAL, no GitHub Actions** (`publicar_episodio.sh` +
+   `generar_rss.py`): GitHub Actions se probó y se abandonó — El País bloquea el
+   rango de IPs de datacenter de los runners (403, incluso con curl_cffi). El
+   pipeline completo corre en la Mac de Gabriel vía **launchd**
+   (`~/Library/LaunchAgents/com.gabrielinchausti.podcast-eym.plist`), lunes 10:00
+   hora Montevideo (coincide con una reunión recurrente de Gabriel, así que la Mac
+   siempre está despierta a esa hora — no usamos `pmset` para despertarla del sueño).
+   El script sube el MP3+guion a un Release de GitHub (`gh release create`, con
+   fallback a `gh release upload --clobber` si el tag ya existe), actualiza y pushea
+   `docs/feed.xml`, fuerza un rebuild de Pages (el automático no siempre dispara
+   solo), borra Releases de más de 30 días, y limpia los archivos locales.
 
 ## Archivos
-- `podcast_eym.py` — pipeline principal (scraping + guion + audio). Tiene `--solo-guion`
-  para probar barato sin generar audio, y `--rtf` como modo legado (scrapear desde el
-  mail del newsletter guardado como RTF, herencia de un scraper anterior en R).
-- `generar_rss.py` — mantiene `episodios.json` y regenera `docs/feed.xml`. Idempotente
-  (correr dos veces el mismo día reemplaza, no duplica).
-- `.github/workflows/podcast.yml` — el workflow. Secrets esperados: `OPENAI_API_KEY`
-  y `EL_PAIS_COOKIES` (contenido del cookies.txt, opcional).
+- `podcast_eym.py` — scraping + guion + audio. `--solo-guion` genera solo el guion
+  (sin audio, más barato para probar). `--rtf` es modo legado.
+- `generar_rss.py` — mantiene `episodios.json` y regenera `docs/feed.xml`. Retención
+  por fecha (30 días, `PODCAST["dias_retencion"]`), no por cantidad fija — imprime
+  `VENCIDO:<tag>` por cada episodio que sale de la ventana, para que el script
+  externo borre el Release real de GitHub (si no, el feed listaría links rotos).
+- `publicar_episodio.sh` — orquesta todo el pipeline de producción (ver arquitectura
+  arriba). Loguea a `logs/publicar.log` (gitignored). Manda notificación de macOS
+  (`osascript`) si algo falla.
+- `~/Library/LaunchAgents/com.gabrielinchausti.podcast-eym.plist` — dispara
+  `publicar_episodio.sh` los lunes 10:00. Para probar a mano sin esperar al lunes:
+  `launchctl kickstart gui/$(id -u)/com.gabrielinchausti.podcast-eym`.
+- `docs/cover.png` — logo del podcast (1400x1400) para `<itunes:image>`.
 - `requirements.txt`, `README.md`.
-
-## Estado: qué está probado y qué NO
-Probado (offline, con datos simulados):
-- Sintaxis de todo; extracción de links de sección (links en <a> y en JSON embebido);
-  partido de texto para TTS; generador de RSS de punta a punta; filtro "solo hoy"
-  en zona Montevideo; YAML del workflow válido.
-
-**NO probado (pendiente, en este orden):**
-1. Que el regex de links matchee la portada REAL de la sección (Claude en claude.ai
-   no pudo verificarla: El País bloquea sus fetchers; desde esta máquina debería andar).
-2. Que las cookies de sesión den acceso al texto completo de notas "Contenido Exclusivo".
-3. Llamadas reales a OpenAI (guion y TTS) — probar primero con `--solo-guion`.
-4. La cadena completa en GitHub Actions. Riesgo conocido: El País podría bloquear
-   las IPs de datacenter de GitHub. Plan B si pasa: correr local con cron/launchd.
+- **NO existe `.github/workflows/`** — se borró a propósito, no dejar uno nuevo ahí
+  salvo que el bloqueo de IP de GitHub Actions se resuelva de alguna forma.
 
 ## Credenciales — reglas estrictas
-- `OPENAI_API_KEY` va como variable de entorno local y como secret en GitHub. NUNCA
-  en el código, en commits, ni pegada en el chat.
-- `cookies.txt` (sesión de El País, exportado con una extensión tipo "Get cookies.txt
-  LOCALLY") es un archivo local que NUNCA se commitea. Agregarlo a `.gitignore` junto
-  con `episodios.json` de pruebas locales, `*.mp3` y `guion-*.txt`.
-  En Actions viaja como secret `EL_PAIS_COOKIES`.
-- Las cookies vencen: si los episodios salen "recortados", re-exportar y actualizar el secret.
+- `OPENAI_API_KEY` va como variable de entorno local (en `~/.zshrc`, porque
+  `launchd` no hereda el shell interactivo — `publicar_episodio.sh` la sourcea
+  explícito). NUNCA en el código, en commits, ni pegada en el chat.
+- `cookies.txt` (sesión de El País, exportado con "Get cookies.txt LOCALLY") es
+  local, NUNCA se commitea (`.gitignore`). Si la extensión exporta "todos los
+  dominios" en vez de solo elpais.com.uy, filtrar con:
+  `awk -F'\t' '/^#/ || /^$/ || $1 ~ /elpais\.com\.uy/' archivo_original > cookies.txt`
+- **Las cookies vencen (~1 mes) y BLOQUEAN TODO el scraping con 403** (no degradan
+  suave como se pensaba originalmente — probado el 10/08/2026). Diagnóstico: probar
+  `extraer_links_seccion()` con y sin cookies; si sin cookies anda y con cookies
+  da 403, son las cookies. Arreglo: reexportar, reemplazar `cookies.txt`, correr
+  `launchctl kickstart gui/$(id -u)/com.gabrielinchausti.podcast-eym` para recuperar
+  el episodio de la semana. Gabriel prefiere arreglarlo reactivo cuando pase, no
+  quiso automatizar un aviso proactivo (decisión tomada, no volver a proponerlo
+  salvo que él lo pida).
 - No usar usuario/contraseña de El País en ningún script.
 
 ## Cómo trabajar con Gabriel
@@ -67,17 +83,8 @@ Probado (offline, con datos simulados):
   entender el código a nivel de componente y aprender haciendo; no entregar cajas negras.
 - Ir por etapas chicas verificando entendimiento compartido antes de avanzar.
 - Conoce Git de proyectos anteriores (commits, branches, rebase vs merge) pero
-  agradece que se le expliquen comandos nuevos.
+  agradece que se le expliquen comandos nuevos. Es su primera vez con Claude Code
+  específicamente (no solo con Claude) — puede necesitar más contexto sobre el
+  funcionamiento de la herramienta en sí (sesiones, memoria, tools) al principio.
 - Prefiere salidas concisas y bien organizadas.
-
-## Primera sesión sugerida
-1. Verificar estructura de carpeta y crear `.gitignore`.
-2. `pip install -r requirements.txt` (o venv).
-3. Probar scraping real: correr con `--solo-guion --dias 7` (si no es lunes) y revisar
-   la lista de notas detectadas. Ajustar regex/selectores si la portada real difiere.
-4. Probar con cookies para validar acceso de suscriptor.
-5. Corrida completa con audio; escuchar el MP3.
-6. Recién entonces: crear repo en GitHub (privado o público según decida Gabriel;
-   ojo que Pages en repo privado requiere plan pago), pushear, cargar secrets
-   (Gabriel los carga en la web de GitHub), habilitar Pages desde /docs,
-   y disparar el workflow a mano (workflow_dispatch) para validar la cadena.
+- Usa `gh` CLI (instalado y autenticado como `gabrielinchausti`) para todo lo de GitHub.
