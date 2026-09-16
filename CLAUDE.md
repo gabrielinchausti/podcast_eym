@@ -41,6 +41,11 @@ https://gabrielinchausti.github.io/podcast_eym/feed.xml
    fallback a `gh release upload --clobber` si el tag ya existe), actualiza y pushea
    `docs/feed.xml`, fuerza un rebuild de Pages (el automático no siempre dispara
    solo), borra Releases de más de 30 días, y limpia los archivos locales.
+   El paso de scraping reintenta solo hasta 2 veces más (a los 10 y 30 min) si
+   falla — El País tiene bloqueos 403 transitorios frecuentes (fallaron 3 de los
+   primeros 5 lunes en producción) que se destraban solos pasado un rato, sin ser
+   vencimiento de cookies. Si los 3 intentos fallan, recién ahí manda la
+   notificación de fallo.
 
 ## Archivos
 - `podcast_eym.py` — scraping + guion + audio. `--solo-guion` genera solo el guion
@@ -68,14 +73,22 @@ https://gabrielinchausti.github.io/podcast_eym/feed.xml
   local, NUNCA se commitea (`.gitignore`). Si la extensión exporta "todos los
   dominios" en vez de solo elpais.com.uy, filtrar con:
   `awk -F'\t' '/^#/ || /^$/ || $1 ~ /elpais\.com\.uy/' archivo_original > cookies.txt`
-- **Las cookies vencen (~1 mes) y BLOQUEAN TODO el scraping con 403** (no degradan
-  suave como se pensaba originalmente — probado el 10/08/2026). Diagnóstico: probar
-  `extraer_links_seccion()` con y sin cookies; si sin cookies anda y con cookies
-  da 403, son las cookies. Arreglo: reexportar, reemplazar `cookies.txt`, correr
-  `launchctl kickstart gui/$(id -u)/com.gabrielinchausti.podcast-eym` para recuperar
-  el episodio de la semana. Gabriel prefiere arreglarlo reactivo cuando pase, no
-  quiso automatizar un aviso proactivo (decisión tomada, no volver a proponerlo
-  salvo que él lo pida).
+- El 403 al scrapear tiene DOS causas distintas, hay que diagnosticar cuál es antes
+  de actuar — probar `extraer_links_seccion()` con y sin cookies:
+  - **Sin cookies falla, con cookies anda**: las cookies están bien, el problema es
+    otra cosa (raro).
+  - **Con cookies falla, sin cookies anda**: las cookies vencieron (duran entre
+    ~2 semanas y ~1 mes, variable, no fijo — probado el 10/08 y de nuevo el
+    25/08/2026). Arreglo: reexportar, reemplazar `cookies.txt`, correr
+    `launchctl kickstart gui/$(id -u)/com.gabrielinchausti.podcast-eym`.
+  - **Fallan las dos**: bloqueo transitorio del sitio (pasó varias veces desde
+    24/08/2026), no es cookies. El script ya reintenta solo (ver arquitectura) —
+    si igual falló del todo, probar de nuevo más tarde suele alcanzar, sin tocar
+    `cookies.txt`.
+  Gabriel prefiere arreglar el vencimiento de cookies reactivo cuando pase, no
+  quiso automatizar un aviso proactivo para eso (decisión tomada, no volver a
+  proponerlo salvo que él lo pida). El reintento automático para el bloqueo
+  transitorio sí lo pidió (16/09/2026).
 - No usar usuario/contraseña de El País en ningún script.
 
 ## Cómo trabajar con Gabriel
