@@ -27,7 +27,15 @@ GUION="guion-eym-$FECHA.txt"
 TAG="eym-$FECHA"
 
 echo "Paso 1/6: generando episodio (scraping + guion + audio)..."
-"$PYTHON" podcast_eym.py --dias 5 --cookies cookies.txt --salida "$MP3"
+if ! "$PYTHON" podcast_eym.py --dias 5 --cookies cookies.txt --salida "$MP3"; then
+    echo "  Intento 1 falló (probable bloqueo transitorio de El País). Espero 10 min y reintento..."
+    sleep 600
+    if ! "$PYTHON" podcast_eym.py --dias 5 --cookies cookies.txt --salida "$MP3"; then
+        echo "  Intento 2 falló. Espero 30 min y reintento (último intento)..."
+        sleep 1800
+        "$PYTHON" podcast_eym.py --dias 5 --cookies cookies.txt --salida "$MP3"
+    fi
+fi
 
 if [ ! -f "$MP3" ] || [ ! -f "$GUION" ]; then
     echo "ERROR: no se generaron los archivos esperados ($MP3 / $GUION)."
