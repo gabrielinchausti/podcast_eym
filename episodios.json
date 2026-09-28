@@ -1,5 +1,12 @@
 [
   {
+    "titulo": "Economía y Mercado — 2026-09-28",
+    "descripcion": "Resumen semanal de Economía y Mercado.",
+    "url": "https://github.com/gabrielinchausti/podcast_eym/releases/download/eym-2026-09-28/episodio-eym-2026-09-28.mp3",
+    "bytes": 4553856,
+    "pubdate": "Mon, 28 Sep 2026 13:01:14 +0000"
+  },
+  {
     "titulo": "Economía y Mercado — 2026-09-21",
     "descripcion": "Resumen semanal de Economía y Mercado.",
     "url": "https://github.com/gabrielinchausti/podcast_eym/releases/download/eym-2026-09-21/episodio-eym-2026-09-21.mp3",
@@ -26,12 +33,5 @@
     "url": "https://github.com/gabrielinchausti/podcast_eym/releases/download/eym-2026-08-31/episodio-eym-2026-08-31.mp3",
     "bytes": 6574464,
     "pubdate": "Mon, 31 Aug 2026 13:01:43 +0000"
-  },
-  {
-    "titulo": "Economía y Mercado — 2026-08-25",
-    "descripcion": "Resumen semanal de Economía y Mercado.",
-    "url": "https://github.com/gabrielinchausti/podcast_eym/releases/download/eym-2026-08-25/episodio-eym-2026-08-25.mp3",
-    "bytes": 5758080,
-    "pubdate": "Tue, 25 Aug 2026 19:00:48 +0000"
   }
 ]
