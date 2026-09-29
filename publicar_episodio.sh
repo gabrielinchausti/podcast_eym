@@ -26,14 +26,22 @@ MP3="episodio-eym-$FECHA.mp3"
 GUION="guion-eym-$FECHA.txt"
 TAG="eym-$FECHA"
 
-echo "Paso 1/6: generando episodio (scraping + guion + audio)..."
-if ! "$PYTHON" podcast_eym.py --dias 5 --cookies cookies.txt --salida "$MP3"; then
+# Dos corridas por semana, sin superposición: lunes cubre jueves 10:00->lunes 10:00 (4 días),
+# jueves cubre lunes 10:00->jueves 10:00 (3 días). date +%u: 1=lunes ... 4=jueves.
+if [ "$(date +%u)" = "4" ]; then
+    DIAS=3
+else
+    DIAS=4
+fi
+
+echo "Paso 1/6: generando episodio (scraping + guion + audio, --dias $DIAS)..."
+if ! "$PYTHON" podcast_eym.py --dias "$DIAS" --cookies cookies.txt --salida "$MP3"; then
     echo "  Intento 1 falló (probable bloqueo transitorio de El País). Espero 10 min y reintento..."
     sleep 600
-    if ! "$PYTHON" podcast_eym.py --dias 5 --cookies cookies.txt --salida "$MP3"; then
+    if ! "$PYTHON" podcast_eym.py --dias "$DIAS" --cookies cookies.txt --salida "$MP3"; then
         echo "  Intento 2 falló. Espero 30 min y reintento (último intento)..."
         sleep 1800
-        "$PYTHON" podcast_eym.py --dias 5 --cookies cookies.txt --salida "$MP3"
+        "$PYTHON" podcast_eym.py --dias "$DIAS" --cookies cookies.txt --salida "$MP3"
     fi
 fi
 
