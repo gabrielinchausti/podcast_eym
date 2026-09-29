@@ -2,9 +2,12 @@
 
 ## Qué es esto
 Pipeline que genera automáticamente un podcast personal de ~5 minutos resumiendo
-las columnas del suplemento **Economía y Mercado** del diario El País (Uruguay),
-que se publican los **lunes**. El episodio se escucha en Apple Podcasts durante
-el viaje al trabajo del dueño del proyecto (Gabriel).
+las columnas del suplemento **Economía y Mercado** del diario El País (Uruguay).
+Originalmente se pensó como semanal (publicaban solo los lunes), pero en la
+práctica las columnas salen repartidas en varios días de la semana — por eso
+desde el 29/09/2026 corre **dos veces por semana** (lunes y jueves). El episodio
+se escucha en Apple Podcasts durante el viaje al trabajo del dueño del proyecto
+(Gabriel).
 
 Este proyecto fue diseñado en conversaciones con Claude en claude.ai. Existe un
 proyecto hermano con arquitectura de distribución similar (GitHub Releases + RSS
@@ -12,7 +15,8 @@ en GitHub Pages): un podcast que graba el informativo matinal de Radio Montecarl
 (CX20), repo `montecarlo-podcast`.
 
 ## Estado: en producción
-El pipeline corre automático todos los lunes desde el 13/07/2026. Repo público:
+El pipeline corre automático desde el 13/07/2026 (solo lunes hasta el 28/09,
+lunes y jueves desde el 29/09/2026). Repo público:
 https://github.com/gabrielinchausti/podcast_eym — feed en
 https://gabrielinchausti.github.io/podcast_eym/feed.xml
 
@@ -22,8 +26,13 @@ https://gabrielinchausti.github.io/podcast_eym/feed.xml
    baja cada nota y extrae título/autor/fecha/cuerpo desde metadatos
    (`og:title`, `article:author`, `article:published_time`). Usa `curl_cffi` con
    `impersonate="chrome"` en vez de `requests` — El País bloquea por fingerprint TLS.
-   En producción corre con `--dias 5` (ventana de ~5 días para no perder columnas de
-   jueves/viernes si el run cae más tarde en el día).
+   La ventana (`--dias`) varía según qué corrida es, para que las dos no se pisen:
+   lunes usa `--dias 4` (cubre jueves 10:00 → lunes 10:00), jueves usa `--dias 3`
+   (cubre lunes 10:00 → jueves 10:00) — calculado en `publicar_episodio.sh` con
+   `date +%u` (1=lunes...4=jueves). Si algún día hay que recuperar una corrida
+   perdida mucho tiempo después, puede hacer falta pasar un `--dias` más amplio
+   a mano para no perder notas viejas (la ventana es siempre relativa al momento
+   de ejecución, no a un lunes/jueves fijo).
 2. **Guion**: API de OpenAI (`gpt-4o-mini`) escribe el guion en español rioplatense,
    con reglas de dicción radial (números en palabras). Duración variable: piso de
    ~70-80 palabras por nota (mínimo ~30s hablados), techo total de 1800 palabras;
@@ -34,9 +43,12 @@ https://gabrielinchausti.github.io/podcast_eym/feed.xml
    `generar_rss.py`): GitHub Actions se probó y se abandonó — El País bloquea el
    rango de IPs de datacenter de los runners (403, incluso con curl_cffi). El
    pipeline completo corre en la Mac de Gabriel vía **launchd**
-   (`~/Library/LaunchAgents/com.gabrielinchausti.podcast-eym.plist`), lunes 10:00
-   hora Montevideo (coincide con una reunión recurrente de Gabriel, así que la Mac
-   siempre está despierta a esa hora — no usamos `pmset` para despertarla del sueño).
+   (`~/Library/LaunchAgents/com.gabrielinchausti.podcast-eym.plist`), **lunes y
+   jueves 10:00** hora Montevideo (`StartCalendarInterval` es un array con las dos
+   entradas; Weekday 1 = lunes, Weekday 4 = jueves). El horario coincide con una
+   reunión recurrente de Gabriel los lunes, así que la Mac suele estar despierta a
+   esa hora — no usamos `pmset` para despertarla del sueño, así que si algún jueves
+   la Mac está dormida a las 10, esa corrida no dispara y hay que recuperarla a mano.
    El script sube el MP3+guion a un Release de GitHub (`gh release create`, con
    fallback a `gh release upload --clobber` si el tag ya existe), actualiza y pushea
    `docs/feed.xml`, fuerza un rebuild de Pages (el automático no siempre dispara
@@ -58,8 +70,11 @@ https://gabrielinchausti.github.io/podcast_eym/feed.xml
   arriba). Loguea a `logs/publicar.log` (gitignored). Manda notificación de macOS
   (`osascript`) si algo falla.
 - `~/Library/LaunchAgents/com.gabrielinchausti.podcast-eym.plist` — dispara
-  `publicar_episodio.sh` los lunes 10:00. Para probar a mano sin esperar al lunes:
-  `launchctl kickstart gui/$(id -u)/com.gabrielinchausti.podcast-eym`.
+  `publicar_episodio.sh` lunes y jueves 10:00. Para probar a mano sin esperar:
+  `launchctl kickstart gui/$(id -u)/com.gabrielinchausti.podcast-eym`. Si se edita
+  el plist, hay que recargarlo (`kickstart` no alcanza para cambios de config):
+  `launchctl bootout gui/$(id -u)/com.gabrielinchausti.podcast-eym` seguido de
+  `launchctl bootstrap gui/$(id -u) <ruta-al-plist>`.
 - `docs/cover.png` — logo del podcast (1400x1400) para `<itunes:image>`.
 - `requirements.txt`, `README.md`.
 - **NO existe `.github/workflows/`** — se borró a propósito, no dejar uno nuevo ahí
