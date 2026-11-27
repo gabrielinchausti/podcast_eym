@@ -23,9 +23,25 @@ https://gabrielinchausti.github.io/podcast_eym/feed.xml
 ## Arquitectura (4 etapas)
 1. **Scraping** (`podcast_eym.py`): entra a https://www.elpais.com.uy/economia-y-mercado,
    junta links de notas con regex sobre el HTML crudo (patrón `/economia-y-mercado/<slug>`),
-   baja cada nota y extrae título/autor/fecha/cuerpo desde metadatos
-   (`og:title`, `article:author`, `article:published_time`). Usa `curl_cffi` con
+   baja cada nota y extrae título/autor/fecha/cuerpo desde el bloque
+   `<script type="application/ld+json">` de tipo `schema.org/NewsArticle` que trae la
+   página (`headline`/`author`/`datePublished`/`articleBody`). Usa `curl_cffi` con
    `impersonate="chrome"` en vez de `requests` — El País bloquea por fingerprint TLS.
+   **Nota histórica (27/11/2026)**: hasta esta fecha `leer_articulo()` sacaba el cuerpo
+   juntando texto de tags `<p>` del HTML + metadatos sueltos (`og:title`,
+   `article:author`, `article:published_time`). El País rediseñó las páginas de nota y
+   el cuerpo real dejó de estar en `<p>` visibles — quedó solo en ese bloque JSON-LD.
+   Eso rompió la extracción en silencio (bodies de ~4 caracteres) y el modelo de guion
+   de entonces (`gpt-4o-mini`) tapó el hueco inventando contenido plausible a partir
+   del título, sin avisar — confirmado comparando guiones viejos reales contra el
+   scraping de esas mismas notas. Quedan menos de 30 días de Releases para auditar
+   (ver retención en `generar_rss.py`), así que no se puede saber con certeza desde
+   cuándo exactamente. Si en el futuro el guion vuelve a sonar "genérico" o con
+   afirmaciones que no se pueden rastrear a una cifra/nombre concreto, sospechar
+   primero de la extracción (¿`leer_articulo()` está devolviendo cuerpos vacíos o muy
+   cortos?) antes que del modelo o el prompt — hay un fallback al método viejo
+   (`<p>` + metadatos) por si el bloque JSON-LD vuelve a cambiar de forma, pero si
+   El País cambia de estructura otra vez va a hacer falta repetir este diagnóstico.
    La ventana (`--dias`) varía según qué corrida es, para que las dos no se pisen:
    lunes usa `--dias 4` (cubre jueves 10:00 → lunes 10:00), jueves usa `--dias 3`
    (cubre lunes 10:00 → jueves 10:00) — calculado en `publicar_episodio.sh` con
@@ -33,9 +49,13 @@ https://gabrielinchausti.github.io/podcast_eym/feed.xml
    perdida mucho tiempo después, puede hacer falta pasar un `--dias` más amplio
    a mano para no perder notas viejas (la ventana es siempre relativa al momento
    de ejecución, no a un lunes/jueves fijo).
-2. **Guion**: API de OpenAI (`gpt-4o-mini`) escribe el guion en español rioplatense,
-   con reglas de dicción radial (números en palabras). Duración variable: piso de
-   ~70-80 palabras por nota (mínimo ~30s hablados), techo total de 1800 palabras;
+2. **Guion**: API de OpenAI (`gpt-6.2-sol`, desde el 27/11/2026 — antes `gpt-4o-mini`)
+   escribe el guion en español rioplatense, con reglas de dicción radial (números en
+   palabras) y una regla explícita de ir a contenido concreto (cifras, nombres,
+   conclusiones puntuales) en vez de quedarse en meta-descripción genérica ("la nota
+   destaca que..."). Nota: `gpt-6.2-sol` no acepta `temperature` custom (solo el
+   default), por eso no se pasa ese parámetro. Duración variable: piso de ~70-80
+   palabras por nota (mínimo ~30s hablados), techo total de 1800 palabras;
    instrucción explícita de no omitir ninguna nota recibida.
 3. **Audio**: TTS de OpenAI (`gpt-4o-mini-tts`, voz "ash"). El guion se parte en
    trozos de ≤3000 caracteres cortando en fin de oración; los MP3 se concatenan.

@@ -25,6 +25,7 @@ Requisitos:
 
 import argparse
 import http.cookiejar
+import json
 import os
 import re
 import sys
@@ -40,7 +41,7 @@ from openai import OpenAI
 # ─── Configuración ────────────────────────────────────────────────────────────
 
 URL_SECCION  = "https://www.elpais.com.uy/economia-y-mercado"
-MODELO_GUION = "gpt-4o-mini"        # modelo que escribe el guion
+MODELO_GUION = "gpt-6.2-sol"        # modelo que escribe el guion (gpt-4o-mini está deprecado)
 MODELO_TTS   = "gpt-4o-mini-tts"    # modelo de texto a voz
 VOZ_DEFAULT  = "ash"                # alternativas: onyx, alloy, echo, nova, etc.
 MAX_CHARS_TTS = 3000                # margen seguro bajo el límite por pedido
@@ -140,13 +141,51 @@ def extraer_links_rtf(rtf_path: str) -> list[str]:
 
 # ─── 2. Scrapear artículos ────────────────────────────────────────────────────
 
+def _extraer_json_ld_noticia(soup: BeautifulSoup) -> dict | None:
+    """Busca, entre los bloques <script type="application/ld+json">, el que describe
+    la nota (schema.org NewsArticle) y lo devuelve parseado. El País mudó ahí el cuerpo
+    completo del artículo; los <p> visibles del HTML ya no lo traen."""
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            datos = json.loads(script.string or "")
+        except (TypeError, ValueError):
+            continue
+        if datos.get("@type") == "NewsArticle":
+            return datos
+    return None
+
+
 def leer_articulo(sesion: requests.Session, url: str) -> dict:
     """Baja una nota y devuelve título, autor, fecha de publicación y cuerpo limpio."""
     try:
         resp = sesion.get(url, timeout=30)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
+        noticia = _extraer_json_ld_noticia(soup)
 
+        if noticia and noticia.get("articleBody"):
+            titulo = noticia.get("headline", "(sin título)").strip()
+
+            autores = noticia.get("author") or []
+            if isinstance(autores, dict):
+                autores = [autores]
+            autor = autores[0]["name"] if autores and autores[0].get("name") else "Autor no disponible"
+
+            fecha = None
+            fecha_raw = noticia.get("datePublished")
+            if fecha_raw:
+                try:
+                    fecha = datetime.fromisoformat(fecha_raw.replace("Z", "+00:00"))
+                    if fecha.tzinfo is None:
+                        # El sitio no manda offset; sus timestamps son hora de Montevideo.
+                        fecha = fecha.replace(tzinfo=TZ_UY)
+                except ValueError:
+                    pass
+
+            cuerpo = noticia["articleBody"]
+            return {"titulo": titulo, "autor": autor, "fecha": fecha, "cuerpo": cuerpo, "url": url}
+
+        # Fallback: sitio sin el bloque NewsArticle (no debería pasar, pero por si cambia de nuevo).
         meta_titulo = soup.find("meta", attrs={"name": "twitter:title"}) or \
                       soup.find("meta", attrs={"property": "og:title"})
         titulo = meta_titulo["content"].strip() if meta_titulo else "(sin título)"
@@ -164,7 +203,6 @@ def leer_articulo(sesion: requests.Session, url: str) -> dict:
             try:
                 fecha = datetime.fromisoformat(meta_fecha["content"].replace("Z", "+00:00"))
                 if fecha.tzinfo is None:
-                    # El sitio no manda offset; sus timestamps son hora de Montevideo.
                     fecha = fecha.replace(tzinfo=TZ_UY)
             except ValueError:
                 pass
@@ -215,6 +253,7 @@ Estructura:
 Reglas importantes:
 - Texto corrido listo para leer en voz alta: SIN títulos, SIN viñetas, SIN indicaciones entre corchetes, SIN emojis.
 - Resumí y parafraseá con tus palabras; no copies frases textuales largas de las notas.
+- CONTENIDO CONCRETO, no meta-descripción: nunca te quedes en "la nota destaca que...", "el autor argumenta sobre...", "se analiza la situación de..." como única información de un bloque. Decí directamente la cifra, el nombre propio, la institución o la conclusión específica que da la nota. Si el autor compara dos cosas, decí cuáles; si da un número, decilo; si cita a alguien, decí quién y qué dijo.
 - Si una nota llegó incompleta o cortada por el muro de pago, resumí lo que haya y aclaralo con naturalidad ("en su columna, de la que conocemos el planteo inicial, ...").
 - Números y siglas escritos para dicción radial (por ejemplo "tres coma cinco por ciento", "el Banco Central").
 
@@ -227,7 +266,6 @@ NOTAS:
             {"role": "system", "content": prompt_sistema},
             {"role": "user", "content": prompt_usuario},
         ],
-        temperature=0.7,
     )
     return respuesta.choices[0].message.content.strip()
 
